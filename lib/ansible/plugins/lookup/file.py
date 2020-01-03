@@ -12,22 +12,42 @@ DOCUMENTATION = """
     description:
         - This lookup returns the contents from a file on the Ansible controller's file system.
     options:
-      _terms:
-        description: path(s) of files to read
-        required: True
-      rstrip:
-        description: whether or not to remove whitespace from the ending of the looked-up file
-        type: bool
-        required: False
-        default: True
-      lstrip:
-        description: whether or not to remove whitespace from the beginning of the looked-up file
-        type: bool
-        required: False
-        default: False
+        _terms:
+            description: path(s) of files to read
+            required: True
+        rstrip:
+            description: whether or not to remove whitespace from the end of the file
+            type: bool
+            required: False
+            default: True
+        lstrip:
+            description: whether or not to remove whitespace from the beginning of the file
+            type: bool
+            required: False
+            default: False
+        rstrip_non_printable:
+            description: >
+                whether or not to remove non-printable characters from the end of the file
+            type: bool
+            required: False
+            default: False
+        lstrip_non_printable:
+            description: >
+                whether or not to remove non-printable characters from the beginning of
+                the file
+            type: bool
+            required: False
+            default: False
+        encoding:
+            description: Encoding to read the file with
+            type: str
+            required: False
+            default: utf-8
     notes:
-      - if read in variable context, the file can be interpreted as YAML if the content is valid to the parser.
-      - this lookup does not understand 'globing', use the fileglob lookup instead.
+        - >
+            if read in variable context, the file can be interpreted as YAML if the content is
+            valid to the parser.
+        - this lookup does not understand 'globbing', use the fileglob lookup instead.
 """
 
 EXAMPLES = """
@@ -46,6 +66,8 @@ RETURN = """
     description:
       - content of file(s)
 """
+
+import string
 
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.plugins.lookup import LookupBase
@@ -70,11 +92,33 @@ class LookupModule(LookupBase):
             try:
                 if lookupfile:
                     b_contents, show_data = self._loader._get_file_contents(lookupfile)
-                    contents = to_text(b_contents, errors='surrogate_or_strict')
-                    if kwargs.get('lstrip', False):
-                        contents = contents.lstrip()
-                    if kwargs.get('rstrip', True):
-                        contents = contents.rstrip()
+                    contents = to_text(
+                        b_contents, encoding=kwargs.get('encoding', 'utf-8'),
+                        errors='surrogate_or_strict'
+                    )
+                    lstrip_npa = kwargs.get('lstrip_non_printable', False)
+                    rstrip_npa = kwargs.get('rstrip_non_printable', False)
+                    lstrip = kwargs.get('lstrip', False)
+                    rstrip = kwargs.get('rstrip', False)
+                    lindex = 0
+                    rindex = 0
+                    if lstrip or lstrip_npa:
+                        for lindex, char in enumerate(contents):
+                            if lstrip and char in string.whitespace:
+                                continue
+                            elif lstrip_npa and char not in string.printable:
+                                continue
+                            else:
+                                break
+                    if rstrip or rstrip_npa:
+                        for rindex, char in enumerate(reversed(contents)):
+                            if rstrip and char in string.whitespace:
+                                continue
+                            elif rstrip_npa and char not in string.printable:
+                                continue
+                            else:
+                                break
+                    contents = contents[lindex:(len(contents)-rindex)]
                     ret.append(contents)
                 else:
                     raise AnsibleParserError()

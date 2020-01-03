@@ -1,0 +1,28 @@
+---
+- name: ensure output file doesn't exist
+  file:
+    path: "{{output_dir}}/foo.txt"
+    state: absent
+
+- name: make a new file to read
+  copy:
+    dest: "{{output_dir}}/foo.txt"
+    mode: "0644"
+    content: "{{ input }}"
+
+- name: load the file as a fact
+  set_fact:
+    result: "{{ lookup('file', output_dir + '/foo.txt', **args) }}"
+
+- debug:
+    msg:
+      - "Test Index: <{{ index }}>"
+      - "Input: <{{ input }}>"
+      - "Expected: <{{ expected }}>"
+      - "Got: <{{ result }}>"
+
+- name: verify file lookup
+  assert:
+    that:
+      - "'{{ result }}' == '{{ expected }}'"
+...
